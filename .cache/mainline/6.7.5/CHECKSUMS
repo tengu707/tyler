@@ -1,0 +1,14 @@
+# Checksums, check with the command below:
+#     shasum -c CHECKSUMS
+#
+# Checksums-Sha1:
+395adecce3ce046161fe6aeb686a446b1387c68c  linux-headers-6.7.5-060705-generic_6.7.5-060705.202402161836_amd64.deb
+c542b05e07ea85ea90f9699b83bdb1d6c2e7de01  linux-headers-6.7.5-060705_6.7.5-060705.202402161836_all.deb
+bb25c386fa494d8c1f84968e39421e704c3acde3  linux-image-unsigned-6.7.5-060705-generic_6.7.5-060705.202402161836_amd64.deb
+6f69cd60f934cc0b997ac8b9343e793f8eb1b05b  linux-modules-6.7.5-060705-generic_6.7.5-060705.202402161836_amd64.deb
+#
+# Checksums-Sha256:
+0f6dbe495ddaeafd372197a5d885411f893bf4f20301cf498d80fdc647ab14b7  linux-headers-6.7.5-060705-generic_6.7.5-060705.202402161836_amd64.deb
+19ec7a2b83d86dc69c88a57fdbb396eabe28219a41c38bc2ff7b701e39373c79  linux-headers-6.7.5-060705_6.7.5-060705.202402161836_all.deb
+0a93c8b9fce8aedb4b007d993c4a23229f9d2bbfa9bacd0a2bc2144a5aec6824  linux-image-unsigned-6.7.5-060705-generic_6.7.5-060705.202402161836_amd64.deb
+8528ecb5ece4dd4f648179577fcde55c424fffa8a4e84bbd34452dcd1fbd4740  linux-modules-6.7.5-060705-generic_6.7.5-060705.202402161836_amd64.deb

@@ -1,0 +1,628 @@
+/**
+ * @license Rangy Inputs, a jQuery plug-in for selection and caret manipulation within textareas and text inputs.
+ *
+ * https://github.com/timdown/rangyinputs
+ *
+ * For range and selection features for contenteditable, see Rangy.
+
+ * http://code.google.com/p/rangy/
+ *
+ * Depends on jQuery 1.0 or later.
+ *
+ * Copyright 2013, Tim Down
+ * Licensed under the MIT license.
+ * Version: 1.1
+ * Build date: 31 March 2013
+ */
+(function($) {
+    var UNDEF = "undefined";
+    var getSelection, setSelection, deleteSelectedText, deleteText, insertText;
+    var replaceSelectedText, surroundSelectedText, extractSelectedText, collapseSelection;
+
+    // Trio of isHost* functions taken from Peter Michaux's article:
+    // http://peter.michaux.ca/articles/feature-detection-state-of-the-art-browser-scripting
+    function isHostMethod(object, property) {
+        var t = typeof object[property];
+        return t === "function" || (!!(t == "object" && object[property])) || t == "unknown";
+    }
+
+    function isHostProperty(object, property) {
+        return typeof(object[property]) != UNDEF;
+    }
+
+    function isHostObject(object, property) {
+        return !!(typeof(object[property]) == "object" && object[property]);
+    }
+
+    function fail(reason) {
+        if (window.console && window.console.log) {
+            window.console.log("RangyInputs not supported in your browser. Reason: " + reason);
+        }
+    }
+
+    function adjustOffsets(el, start, end) {
+        if (start < 0) {
+            start += el.value.length;
+        }
+        if (typeof end == UNDEF) {
+            end = start;
+        }
+        if (end < 0) {
+            end += el.value.length;
+        }
+        return {start: start, end: end};
+    }
+
+    function makeSelection(el, start, end) {
+        return {
+            start: start,
+            end: end,
+            length: end - start,
+            text: el.value.slice(start, end)
+        };
+    }
+
+    function getBody() {
+        return isHostObject(document, "body") ? document.body : document.getElementsByTagName("body")[0];
+    }
+
+    $(document).ready(function() {
+        var testTextArea = document.createElement("textarea");
+
+        getBody().appendChild(testTextArea);
+
+        if (isHostProperty(testTextArea, "selectionStart") && isHostProperty(testTextArea, "selectionEnd")) {
+            getSelection = function(el) {
+                var start = el.selectionStart, end = el.selectionEnd;
+                return makeSelection(el, start, end);
+            };
+
+            setSelection = function(el, startOffset, endOffset) {
+                var offsets = adjustOffsets(el, startOffset, endOffset);
+                el.selectionStart = offsets.start;
+                el.selectionEnd = offsets.end;
+            };
+
+            collapseSelection = function(el, toStart) {
+                if (toStart) {
+                    el.selectionEnd = el.selectionStart;
+                } else {
+                    el.selectionStart = el.selectionEnd;
+                }
+            };
+        } else if (isHostMethod(testTextArea, "createTextRange") && isHostObject(document, "selection") &&
+            isHostMethod(document.selection, "createRange")) {
+
+            getSelection = function(el) {
+                var start = 0, end = 0, normalizedValue, textInputRange, len, endRange;
+                var range = document.selection.createRange();
+
+                if (range && range.parentElement() == el) {
+                    len = el.value.length;
+
+                    normalizedValue = el.value.replace(/\r\n/g, "\n");
+                    textInputRange = el.createTextRange();
+                    textInputRange.moveToBookmark(range.getBookmark());
+                    endRange = el.createTextRange();
+                    endRange.collapse(false);
+                    if (textInputRange.compareEndPoints("StartToEnd", endRange) > -1) {
+                        start = end = len;
+                    } else {
+                        start = -textInputRange.moveStart("character", -len);
+                        start += normalizedValue.slice(0, start).split("\n").length - 1;
+                        if (textInputRange.compareEndPoints("EndToEnd", endRange) > -1) {
+                            end = len;
+                        } else {
+                            end = -textInputRange.moveEnd("character", -len);
+                            end += normalizedValue.slice(0, end).split("\n").length - 1;
+                        }
+                    }
+                }
+
+                return makeSelection(el, start, end);
+            };
+
+            // Moving across a line break only counts as moving one character in a TextRange, whereas a line break in
+            // the textarea value is two characters. This function corrects for that by converting a text offset into a
+            // range character offset by subtracting one character for every line break in the textarea prior to the
+            // offset
+            var offsetToRangeCharacterMove = function(el, offset) {
+                return offset - (el.value.slice(0, offset).split("\r\n").length - 1);
+            };
+
+            setSelection = function(el, startOffset, endOffset) {
+                var offsets = adjustOffsets(el, startOffset, endOffset);
+                var range = el.createTextRange();
+                var startCharMove = offsetToRangeCharacterMove(el, offsets.start);
+                range.collapse(true);
+                if (offsets.start == offsets.end) {
+                    range.move("character", startCharMove);
+                } else {
+                    range.moveEnd("character", offsetToRangeCharacterMove(el, offsets.end));
+                    range.moveStart("character", startCharMove);
+                }
+                range.select();
+            };
+
+            collapseSelection = function(el, toStart) {
+                var range = document.selection.createRange();
+                range.collapse(toStart);
+                range.select();
+            };
+        } else {
+            getBody().removeChild(testTextArea);
+            fail("No means of finding text input caret position");
+            return;
+        }
+
+        // Clean up
+        getBody().removeChild(testTextArea);
+
+        deleteText = function(el, start, end, moveSelection) {
+            var val;
+            if (start != end) {
+                val = el.value;
+                el.value = val.slice(0, start) + val.slice(end);
+            }
+            if (moveSelection) {
+                setSelection(el, start, start);
+            }
+        };
+
+        deleteSelectedText = function(el) {
+            var sel = getSelection(el);
+            deleteText(el, sel.start, sel.end, true);
+        };
+
+        extractSelectedText = function(el) {
+            var sel = getSelection(el), val;
+            if (sel.start != sel.end) {
+                val = el.value;
+                el.value = val.slice(0, sel.start) + val.slice(sel.end);
+            }
+            setSelection(el, sel.start, sel.start);
+            return sel.text;
+        };
+
+        var updateSelectionAfterInsert = function(el, startIndex, text, selectionBehaviour) {
+            var endIndex = startIndex + text.length;
+
+            selectionBehaviour = (typeof selectionBehaviour == "string") ?
+                selectionBehaviour.toLowerCase() : "";
+
+            if ((selectionBehaviour == "collapsetoend" || selectionBehaviour == "select") && /[\r\n]/.test(text)) {
+                // Find the length of the actual text inserted, which could vary
+                // depending on how the browser deals with line breaks
+                var normalizedText = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+                endIndex = startIndex + normalizedText.length;
+                var firstLineBreakIndex = startIndex + normalizedText.indexOf("\n");
+
+                if (el.value.slice(firstLineBreakIndex, firstLineBreakIndex + 2) == "\r\n") {
+                    // Browser uses \r\n, so we need to account for extra \r characters
+                    endIndex += normalizedText.match(/\n/g).length;
+                }
+            }
+
+            switch (selectionBehaviour) {
+                case "collapsetostart":
+                    setSelection(el, startIndex, startIndex);
+                    break;
+                case "collapsetoend":
+                    setSelection(el, endIndex, endIndex);
+                    break;
+                case "select":
+                    setSelection(el, startIndex, endIndex);
+                    break;
+            }
+        };
+
+        insertText = function(el, text, index, selectionBehaviour) {
+            var val = el.value;
+            el.value = val.slice(0, index) + text + val.slice(index);
+            if (typeof selectionBehaviour == "boolean") {
+                selectionBehaviour = selectionBehaviour ? "collapseToEnd" : "";
+            }
+            updateSelectionAfterInsert(el, index, text, selectionBehaviour);
+        };
+
+        replaceSelectedText = function(el, text, selectionBehaviour) {
+            var sel = getSelection(el), val = el.value;
+            el.value = val.slice(0, sel.start) + text + val.slice(sel.end);
+            updateSelectionAfterInsert(el, sel.start, text, selectionBehaviour || "collapseToEnd");
+        };
+
+        surroundSelectedText = function(el, before, after, selectionBehaviour) {
+            if (typeof after == UNDEF) {
+                after = before;
+            }
+            var sel = getSelection(el), val = el.value;
+            el.value = val.slice(0, sel.start) + before + sel.text + after + val.slice(sel.end);
+            var startIndex = sel.start + before.length;
+            updateSelectionAfterInsert(el, startIndex, sel.text, selectionBehaviour || "select");
+        };
+
+        function jQuerify(func, returnThis) {
+            return function() {
+                var el = this.jquery ? this[0] : this;
+                var nodeName = el.nodeName.toLowerCase();
+
+                if (el.nodeType == 1 && (nodeName == "textarea" || (nodeName == "input" && el.type == "text"))) {
+                    var args = [el].concat(Array.prototype.slice.call(arguments));
+                    var result = func.apply(this, args);
+                    if (!returnThis) {
+                        return result;
+                    }
+                }
+                if (returnThis) {
+                    return this;
+                }
+            };
+        }
+
+        $.fn.extend({
+            getSelection: jQuerify(getSelection, false),
+            setSelection: jQuerify(setSelection, true),
+            collapseSelection: jQuerify(collapseSelection, true),
+            deleteSelectedText: jQuerify(deleteSelectedText, true),
+            deleteText: jQuerify(deleteText, true),
+            extractSelectedText: jQuerify(extractSelectedText, false),
+            insertText: jQuerify(insertText, true),
+            replaceSelectedText: jQuerify(replaceSelectedText, true),
+            surroundSelectedText: jQuerify(surroundSelectedText, true)
+        });
+    });
+})(jQuery);
+           20220106144528-8l:   https://godotforums.org/plugins/editor/js/rangy.js?v=1.8.1   ;+  /**
+ * @license Rangy Inputs, a jQuery plug-in for selection and caret manipulation within textareas and text inputs.
+ *
+ * https://github.com/timdown/rangyinputs
+ *
+ * For range and selection features for contenteditable, see Rangy.
+
+ * http://code.google.com/p/rangy/
+ *
+ * Depends on jQuery 1.0 or later.
+ *
+ * Copyright 2013, Tim Down
+ * Licensed under the MIT license.
+ * Version: 1.1
+ * Build date: 31 March 2013
+ */
+(function($) {
+    var UNDEF = "undefined";
+    var getSelection, setSelection, deleteSelectedText, deleteText, insertText;
+    var replaceSelectedText, surroundSelectedText, extractSelectedText, collapseSelection;
+
+    // Trio of isHost* functions taken from Peter Michaux's article:
+    // http://peter.michaux.ca/articles/feature-detection-state-of-the-art-browser-scripting
+    function isHostMethod(object, property) {
+        var t = typeof object[property];
+        return t === "function" || (!!(t == "object" && object[property])) || t == "unknown";
+    }
+
+    function isHostProperty(object, property) {
+        return typeof(object[property]) != UNDEF;
+    }
+
+    function isHostObject(object, property) {
+        return !!(typeof(object[property]) == "object" && object[property]);
+    }
+
+    function fail(reason) {
+        if (window.console && window.console.log) {
+            window.console.log("RangyInputs not supported in your browser. Reason: " + reason);
+        }
+    }
+
+    function adjustOffsets(el, start, end) {
+        if (start < 0) {
+            start += el.value.length;
+        }
+        if (typeof end == UNDEF) {
+            end = start;
+        }
+        if (end < 0) {
+            end += el.value.length;
+        }
+        return {start: start, end: end};
+    }
+
+    function makeSelection(el, start, end) {
+        return {
+            start: start,
+            end: end,
+            length: end - start,
+            text: el.value.slice(start, end)
+        };
+    }
+
+    function getBody() {
+        return isHostObject(document, "body") ? document.body : document.getElementsByTagName("body")[0];
+    }
+
+    $(document).ready(function() {
+        var testTextArea = document.createElement("textarea");
+
+        getBody().appendChild(testTextArea);
+
+        if (isHostProperty(testTextArea, "selectionStart") && isHostProperty(testTextArea, "selectionEnd")) {
+            getSelection = function(el) {
+                var start = el.selectionStart, end = el.selectionEnd;
+                return makeSelection(el, start, end);
+            };
+
+            setSelection = function(el, startOffset, endOffset) {
+                var offsets = adjustOffsets(el, startOffset, endOffset);
+                el.selectionStart = offsets.start;
+                el.selectionEnd = offsets.end;
+            };
+
+            collapseSelection = function(el, toStart) {
+                if (toStart) {
+                    el.selectionEnd = el.selectionStart;
+                } else {
+                    el.selectionStart = el.selectionEnd;
+                }
+            };
+        } else if (isHostMethod(testTextArea, "createTextRange") && isHostObject(document, "selection") &&
+            isHostMethod(document.selection, "createRange")) {
+
+            getSelection = function(el) {
+                var start = 0, end = 0, normalizedValue, textInputRange, len, endRange;
+                var range = document.selection.createRange();
+
+                if (range && range.parentElement() == el) {
+                    len = el.value.length;
+
+                    normalizedValue = el.value.replace(/\r\n/g, "\n");
+                    textInputRange = el.createTextRange();
+                    textInputRange.moveToBookmark(range.getBookmark());
+                    endRange = el.createTextRange();
+                    endRange.collapse(false);
+                    if (textInputRange.compareEndPoints("StartToEnd", endRange) > -1) {
+                        start = end = len;
+                    } else {
+                        start = -textInputRange.moveStart("character", -len);
+                        start += normalizedValue.slice(0, start).split("\n").length - 1;
+                        if (textInputRange.compareEndPoints("EndToEnd", endRange) > -1) {
+                            end = len;
+                        } else {
+                            end = -textInputRange.moveEnd("character", -len);
+                            end += normalizedValue.slice(0, end).split("\n").length - 1;
+                        }
+                    }
+                }
+
+                return makeSelection(el, start, end);
+            };
+
+            // Moving across a line break only counts as moving one character in a TextRange, whereas a line break in
+            // the textarea value is two characters. This function corrects for that by converting a text offset into a
+            // range character offset by subtracting one character for every line break in the textarea prior to the
+            // offset
+            var offsetToRangeCharacterMove = function(el, offset) {
+                return offset - (el.value.slice(0, offset).split("\r\n").length - 1);
+            };
+
+            setSelection = function(el, startOffset, endOffset) {
+                var offsets = adjustOffsets(el, startOffset, endOffset);
+                var range = el.createTextRange();
+                var startCharMove = offsetToRangeCharacterMove(el, offsets.start);
+                range.collapse(true);
+                if (offsets.start == offsets.end) {
+                    range.move("character", startCharMove);
+                } else {
+                    range.moveEnd("character", offsetToRangeCharacterMove(el, offsets.end));
+                    range.moveStart("character", startCharMove);
+                }
+                range.select();
+            };
+
+            collapseSelection = function(el, toStart) {
+                var range = document.selection.createRange();
+                range.collapse(toStart);
+                range.select();
+            };
+        } else {
+            getBody().removeChild(testTextArea);
+            fail("No means of finding text input caret position");
+            return;
+        }
+
+        // Clean up
+        getBody().removeChild(testTextArea);
+
+        deleteText = function(el, start, end, moveSelection) {
+            var val;
+            if (start != end) {
+                val = el.value;
+                el.value = val.slice(0, start) + val.slice(end);
+            }
+            if (moveSelection) {
+                setSelection(el, start, start);
+            }
+        };
+
+        deleteSelectedText = function(el) {
+            var sel = getSelection(el);
+            deleteText(el, sel.start, sel.end, true);
+        };
+
+        extractSelectedText = function(el) {
+            var sel = getSelection(el), val;
+            if (sel.start != sel.end) {
+                val = el.value;
+                el.value = val.slice(0, sel.start) + val.slice(sel.end);
+            }
+            setSelection(el, sel.start, sel.start);
+            return sel.text;
+        };
+
+        var updateSelectionAfterInsert = function(el, startIndex, text, selectionBehaviour) {
+            var endIndex = startIndex + text.length;
+
+            selectionBehaviour = (typeof selectionBehaviour == "string") ?
+                selectionBehaviour.toLowerCase() : "";
+
+            if ((selectionBehaviour == "collapsetoend" || selectionBehaviour == "select") && /[\r\n]/.test(text)) {
+                // Find the length of the actual text inserted, which could vary
+                // depending on how the browser deals with line breaks
+                var normalizedText = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+                endIndex = startIndex + normalizedText.length;
+                var firstLineBreakIndex = startIndex + normalizedText.indexOf("\n");
+
+                if (el.value.slice(firstLineBreakIndex, firstLineBreakIndex + 2) == "\r\n") {
+                    // Browser uses \r\n, so we need to account for extra \r characters
+                    endIndex += normalizedText.match(/\n/g).length;
+                }
+            }
+
+            switch (selectionBehaviour) {
+                case "collapsetostart":
+                    setSelection(el, startIndex, startIndex);
+                    break;
+                case "collapsetoend":
+                    setSelection(el, endIndex, endIndex);
+                    break;
+                case "select":
+                    setSelection(el, startIndex, endIndex);
+                    break;
+            }
+        };
+
+        insertText = function(el, text, index, selectionBehaviour) {
+            var val = el.value;
+            el.value = val.slice(0, index) + text + val.slice(index);
+            if (typeof selectionBehaviour == "boolean") {
+                selectionBehaviour = selectionBehaviour ? "collapseToEnd" : "";
+            }
+            updateSelectionAfterInsert(el, index, text, selectionBehaviour);
+        };
+
+        replaceSelectedText = function(el, text, selectionBehaviour) {
+            var sel = getSelection(el), val = el.value;
+            el.value = val.slice(0, sel.start) + text + val.slice(sel.end);
+            updateSelectionAfterInsert(el, sel.start, text, selectionBehaviour || "collapseToEnd");
+        };
+
+        surroundSelectedText = function(el, before, after, selectionBehaviour) {
+            if (typeof after == UNDEF) {
+                after = before;
+            }
+            var sel = getSelection(el), val = el.value;
+            el.value = val.slice(0, sel.start) + before + sel.text + after + val.slice(sel.end);
+            var startIndex = sel.start + before.length;
+            updateSelectionAfterInsert(el, startIndex, sel.text, selectionBehaviour || "select");
+        };
+
+        function jQuerify(func, returnThis) {
+            return function() {
+                var el = this.jquery ? this[0] : this;
+                var nodeName = el.nodeName.toLowerCase();
+
+                if (el.nodeType == 1 && (nodeName == "textarea" || (nodeName == "input" && el.type == "text"))) {
+                    var args = [el].concat(Array.prototype.slice.call(arguments));
+                    var result = func.apply(this, args);
+                    if (!returnThis) {
+                        return result;
+                    }
+                }
+                if (returnThis) {
+                    return this;
+                }
+            };
+        }
+
+        $.fn.extend({
+            getSelection: jQuerify(getSelection, false),
+            setSelection: jQuerify(setSelection, true),
+            collapseSelection: jQuerify(collapseSelection, true),
+            deleteSelectedText: jQuerify(deleteSelectedText, true),
+            deleteText: jQuerify(deleteText, true),
+            extractSelectedText: jQuerify(extractSelectedText, false),
+            insertText: jQuerify(insertText, true),
+            replaceSelectedText: jQuerify(replaceSelectedText, true),
+            surroundSelectedText: jQuerify(surroundSelectedText, true)
+        });
+    });
+})(jQuery);
+”ò¿Ÿ^   ^       Ò®N¯      UNDEF       „qˆ      getSelection    fY      setSelection   áö‹ƒ      deleteSelectedText     bì-Ô
+      deleteText     Ã1È
+      insertText     ≈ÿÆ◊      replaceSelectedText    ¥ö»!      surroundSelectedText   ﬁ*5,      extractSelectedText	    W»      collapseSelection
+      „Â+      isHostMethod   …⁄É      property   hNπx      isHostProperty     !QxI      isHostObject   ‡˙£Œ      fail   ¯2áâ      window     ˛Q1      console    =X˚      log    n¨üü3      RangyInputs not supported in your browser. Reason:     3◊sˆ      adjustOffsets      π.+      end    <Î∑      makeSelection      à3¿µ      text   ÿÖ Ã      slice      \ˆ„      getBody    ∏OÄ      document   òh;      body   XFZ      getElementsByTagName   ¢Ñ
+      ready      ;P      testTextArea   DC      createElement      ÷ŸÓ      textarea    ≠$~      appendChild!    ÂA¸¨      selectionStart"     L0F      selectionEnd#   µâo2      startOffset$    "ê¡î	      endOffset%      –%      offsets&    Ê‚≈r      toStart'    ‹Yk1      createTextRange(    l8oi	      selection)      ⁄ËS#      createRange*    N5ù[      normalizedValue+    Sf†Ì      textInputRange,     €õÕX      len-    x√       range.      ÀÍX‘      parentElement/      `"©      \r\n0   º.      moveToBookmark1     $!n      getBookmark2    #ùÁ¢      collapse3   Ç 	ï      compareEndPoints4   H™¨
+
+      StartToEnd5     »íÉz	      moveStart6      –¥ï$	      character7      Ú]      EndToEnd8   ˝Ä”á      moveEnd9    ÁhO      offsetToRangeCharacterMove:     ì∫ E      
+;     ‚Î ˇ      startCharMove<      ⁄M!      move=   1<Î      select>     ˘˙K      removeChild?    ›î<-      No means of finding text input caret position@      ¬œlî      moveSelectionA      &⁄õ      valB    9Ôx      selC    M˘ó      updateSelectionAfterInsertD     2íQ
+      startIndexE     ~~      selectionBehaviourF     -œFm      endIndexG   RâDo      toLowerCaseH    ˚rª)      collapsetoendI      ∫Ì∂      [\r\n]J     ﬂd      normalizedTextK     a`i¢      \rL     |™≠      firstLineBreakIndexM    ⁄Eú¡      indexOfN          \nO     ÉˆÓá      collapsetostartP    ]I§      collapseToEndQ      çÕ”O      beforeR     ç≥T      afterS      }“9I      jQuerifyT   …Ÿfv      funcU   «;N
+      returnThisV     ˝f§       jqueryW     U5_      nodeNameX   'JØ(      nodeTypeY   ‹Ÿú…      argsZ   ¶¢Ç      concat[     ªl‡Ù      extend\     >Â/      jQuery]     ≠ñE
+      jQuerify/<      – Ô%,â                                                                                                                                                                      	      	                
+                 	           
+      	                 	                 	                 	                 	                 	                 	                 	                 	                 	                 	                 	                 	                 ≥Oåc                         $ `   P  P  P  P  P  P  P  P  P	  P
+  P  P  P  P  P  P  P            ¸    t               ¸                 ¸                 f               ï ì                 ï ì                                    9  PC  PS               T  PU  P              ï W  Y  s     l               ï ì                ï #  $  %               ï &              ï ì    *  +  ,  u   -               ï H              ï #  $  %  -  ;              ï &  -              ï ì    @  A              ï B              ï B  A              ï D    E  F  J  L              ï   “   E  A              ï   E  B  A              ï Q  R  E  B  A  D  Ø¬0∞/     I      /     K     N     IÙ$KEÆ˙ö   
+      ì           ì    ˝     	   -          	              á&’™ç!´!   D      D                             h    µ   s ÷ü@ `PFÄ %P4P   ¥   ¥   w                         h   ≈   ÷h   ≈   ÷h   ≈   ÷h   ≈   ÷h   ≈   ÷h   ≈   ÷h   ≈   ÷   ≈   ÷∏    µ	   o ÿG
+   €h   s ÷üÕ0 `P;0@4 `P+P/PDÄ P  ò   ò   a                        ∂  ∂ Hƒ   ÷∑      óC   ë   ÷∑      ñ   ë   ÷∂  ∂ Hë   ó   ë
+   ÷∑      ë   úü0 `P= `Pï  Ω0 Q  @   @                            ∂  ∂ H∏   úü0 `P > Q    \   \   )                         ∂  ∂ H   ñ   ë   ÷∂  ∂ Hë   úü0 `P   ß0 Q  ê   ê   W                         µ   G   ñ   ë   ÷µ   G   G   ë   î(   ë   µ   G   ÿG   €   ∂  %s ÷ë   ü0 `P≥0 `Pö PI P    ‡   ‡   â                         ∂ î   ë   ∂ ∂  G   G   %√ ÷ë   ∂ ∏   î   ë   ∂ √ ÷ë   ∂ î   ë
+   ∂ ∂  G   G   %√ ÷ë   6   ∂ 9   ∂ 9   úü0 `P? `PêJ `Pî0 `PL `P? `PêJ
+ `P%(8 Q   |   |   @                  	       6   ∂ 9   ∂ 9   ∂ ∂ &9   ∂  G   ÿG   €∂ ∂ o 9   úü0 `P5 8 8 < ï PH Q Ñ   Ñ   N                  	        ∏    µ      o î   ë   µ   G   ì    ë   µ   ÿG   €   o Hë	   úü0 `Pê P≤ :P: Q    ƒ  ƒ  ï         	       0        h   ƒ  ÷µ   ÿG   €   o ƒ   ÷∏   o  ÿG   €∑   s ÷∏   ∑      o ñ   ë   ÷∏   ∑      o ë	   î0   ë
+   h   ≈  ÷h	   ≈  ÷h
+   ≈  ÷ìÀ   ë
+   ∏   ∑      o ñA   ë   ÷∏   µ      o ñ#   ë   ÷∏   µ   G      o ë   î;   ë   h   ≈  ÷h   ≈   ÷h   ≈  ÷h   ≈  ÷ì3   ë   ∏   o  ÿG   €∑   s ÷∏      s ÷ úë   ∏   o  ÿG   €∑   s ÷h   ≈  ÷h   ≈  ÷h   ≈  ÷h   ≈   ÷h   ≈  ÷h   ≈	  ÷h   ≈
+  ÷∏  G   ÿG   €6   ∑   ∏  o 9   ∑   ∏  o 9   ∑   ∏  o 9    ∑   ∏  o 9!   ∑   ∏  o 9"   ∑   ∏  o 9#   ∑   ∏  o 9$   ∑   ∏	  o 9%   ∑   ∏
+  o 9&   s ÷ü: `Pë 	PH `Pî 
+PD `P/Pù $Pí0 `PK `PK `Pï@ `P/Pû %P>ï Pí@ `PK< -`PK@ `PKN `Pï@S0 `Pî 
+P4 `P+P4 `PAÄ  Ã FZ `Pî 
+PD\ `PKg `PKl `PKv )`PKÄ  ñ `PKÄ  ü `PKÄ  • `PKÄ  ¡ `Pñ0 +P8 +P8 +P8 +P8 +P8 +P8 +P8 +P8 +PHÄ  ¡ PDÄ  Ã P   h   h   0                        ∂  G   ƒ   ÷∂  G   ƒ  ÷∏   ∂  ∑   ∑  o úü0 `P-`P= `Pë P3 Q x   x   <                        ∏   ∂  ∂ ∂ o ƒ   ÷∂  ∑   G   I   ÷∂  ∑   G   I   ÷ü0 `P/P8 `Pí0 `Pí0 P   x   x   ?                         ∂ î    ë   ∂  ∂  G   I   ÷ì   ë   ∂  ∂  G   I   ÷ë   ü0 `P= `Põ00 `Pñ@ P Ë  Ë                  7       ƒ   ÷ƒ  ÷µ   G   ÿG   €o  ƒ  ÷∑  ñ   ë   ÷∑  ÿG   €o  ∂  ë   î¢  ë	   ∂  G   G   ƒ  ÷∂  G   ÿG   €g   	   o ƒ  ÷∂  ÿG
+   €o  ƒ  ÷∑  ÿG   €∑  ÿG   €o  s ÷∂  ÿG
+   €o  ƒ  ÷∑  ÿG   €s ÷∑  ÿG   €   ∑  o ˇî   ë   ∑  ƒ  ƒ   ÷ì„   ë   ∑  ÿG   €   ∑  o ƒ   ÷∑   ∑  ÿG   €∑   o ÿG   €	   o G   &%ƒ   ÷∑  ÿG   €   ∑  o ˇî   ë+   ∑  ƒ  ÷ì[   ë+   ∑  ÿG   €   ∑  o ƒ  ÷∑  ∑  ÿG   €∑  o ÿG   €	   o G   &%ƒ  ÷ë6   ∏   ∂  ∑   ∑  o úü0 `P&	`P6 `Pë PH `Pö Pñ0 `Pí@ `Pô P8 `P*P8 `Pñ $P#ˇˇˇÎP4 `P*P8 `P,	P4 `Pî Pê0 `Pó00 `P ê '%ˇˇˇÈP9 `Pî P/P6 `Pî Pê0 `Pì00 `P ê %%ˇˇˇÎP9 `Pî P/PK `Pë P3 Q d   d   2                         ∂ ∂  G   ÿG   €∂ o ÿG   €   o G   &&úü0 `Pñ P/P; Q `  `  Ë          
+              ∏   ∂  ∂ ∂ o ƒ   ÷∂  ÿG   €o  ƒ  ÷∏    ∂  ∑   G   o ƒ  ÷∑  ÿG   €s ÷∑   G   ∑   G   î'   ë   ∑  ÿG   €   ∑  s ÷ìK   ë   ∑  ÿG   €   ∏    ∂  ∑   G   o s ÷∑  ÿG   €   ∑  s ÷ë   ∑  ÿG	   €s  ÷ü0 `P/P8 `P*P8 $`Pí P8 `P,P4 `Pù0 `Pî P>0 `P¢ P#ˇˇˇÎP4 `Pî PI `P+P4 P |   |   ;                        µ   G   ÿG   €o  ƒ   ÷∑   ÿG   €∂ s ÷∑   ÿG   €s  ÷ü0 `Pë P8 `P.P4 `P+P4 P   ƒ   ƒ   v                        ∂ ∂ îD   ë   ∂  G   ƒ   ÷∂  ∑   ÿG   €∂ o ∑   ÿG   €∂ o %I   ÷ë	   ∂ î   ë
+   ∏   ∂  ∂ ∂ s ÷ë   ü00 `Pë0 `P= `Pí Pë PO `P= `P/PI	 P l   l   2                        ∏   ∂  o ƒ   ÷∏   ∂  ∑   G   ∑   G   s ÷ü0 `P)P8 `Pú 
+P4 P    ¯   ¯   £                        ∏   ∂  o ƒ   ÷∑   G   ∑   G   îP   ë   ∂  G   ƒ  ÷∂  ∑  ÿG   €∑   G   o ∑  ÿG   €∑   G   o %I   ÷ë   ∏   ∂  ∑   G   ∑   G   s ÷∑   G   úü0 `P)P8 `Pù0 `P= `Pò Pó PO `Põ P4 `P9 Q î  î  Â                '       ∂ ∂ G   %ƒ   ÷∂    î   ë   ∂ ÿG   €o  ì   ë      ë   √ ÷∂    ó   ë	   ÷∂    ë
+   ñ   ë   ÷g   ÿG   €∂ o ë   î∑   ë   ∂ ÿG	   €g
+      o ÿG	   €g      o ƒ  ÷∂ ∑  G   %ƒ   ÷∂ ∑  ÿG   €   o %ƒ  ÷∂  G   ÿG   €∑  ∑  %o    î,   ë   ∑   ∑  ÿG   €g   o G   %ƒ   ÷ë!   ∂ ÿ   ô1   ë"   ÿ   ô=   ë#   ÿ   ôK   ë$   ö_   ë$   ∏   ∂  ∂ ∂ s ÷ìB   ë%   ∏   ∂  ∑   ∑   s ÷ì#   ë&   ∏   ∂  ∂ ∑   s ÷ì   ë'   ü0 `Pë@ `P î0*#Põ@ `Pº UPí@	 %`Pî Pî P8 `Pí0 *`Pì PI `Pö 	Pì@ `Pî PK `P¿00 `P/P4 `P:0 `Pë P4 `P:0 `Pê P4 `PJ P    Ë   Ë   ò                        ∂  G   ƒ   ÷∂  ∑   ÿG   €∂ o ∂ %∑   ÿG   €∂ o %I   ÷∂    î4   ë   ∂ î   ë      ì   ë      ë   √ ÷ë   ∏    ∂  ∂ ∂ ∂ s ÷ü0 `P= `Pí Pï P: `Pî0 `PØ@ `Pí P4 P   ÿ   ÿ   ç                        ∏   ∂  o ƒ   ÷∂  G   ƒ  ÷∂  ∑  ÿG   €∑   G   o ∂ %∑  ÿG   €∑   G   o %I   ÷∏    ∂  ∑   G   ∂ ∂ ó   ë   ÷   ë   s ÷ü0 `P)P(`P= `Pò Põ !P: `P≠ P4 P    0  0  ”          	              ∂ ∏  î   ë   ∂ √ ÷ë   ∏   ∂  o ƒ   ÷∂  G   ƒ  ÷∂  ∑  ÿG   €∑   G   o ∂ %∑   G   %∂ %∑  ÿG   €∑   G   o %I   ÷∑   G   ∂ G   %ƒ  ÷∏    ∂  ∑  ∑   G   ∂ ó   ë   ÷   ë   s ÷ü0 `Pî0 `PL `P)P(`P= `Pò P© 6P: `Pó0 `PÆ P4 P    4   4                             h   úü0 `PE Q  ¨  ¨  <                       ”ƒ  ÷’ƒ  ÷∑  G   î   ë   ∑  Hì   ë   ∑  ë   ƒ   ÷∑   G   ÿG   €o  ƒ  ÷∑   G   ñD   ë	   ÷∑     ó/   ë   ÷∑     ñ   ë   ÷∑   G      ë   ît   ë   c   ∑   d    ÿG	   €µ
+   G   G   ÿG   €∑  r o ƒ  ÷∏   ÿG   €∑  ∑  q ƒ  ÷∏   ï   ë   ∑  úë   ∏   î   ë   ∑  úë   ü< `P±0 `Pê PH `Pﬁ0 `P%™ !P#ˇˇˇ„P8 !`Pî P8 `P? `PD F `P? `PD V 3ıÿ  `˝  ¸  Œ    `  `¸    `          `ﬁ  ˝      @ì      `  @ì    ˝   ﬁ        `        `V  W  G  X    ‚   æ    Z    `    /      
+  `  p  `!  "    `ì  !    "    `!  "    `  (  )  .  ﬁ  ˝   Z     P
+  '  0  1  2  3  4  5  6    ^  7  8    `ﬁ    ^  :  ˝     `'  ì  2    <  6  8  5  =    `  (  )  2  =    `ﬁ      `ì      `ì    ﬁ        `˝   ˛  G  q   H  =    P•  Z    P
+    PM  ﬁ    :  Y    PO    `ﬁ       P  q     `ﬁ    ì    P    `ﬁ    ì      ˝   =  	  `  p         !  "  
+  p  p  p'  (  )    p  p  p  p>  ?    p  p  p  p  p  p  p◊ [    @    	                `  p  p  p  p  p  p  p˚      	  p   `  p\  ˇXÑÕ                 ¡              †        
+      †              †              †              †              †              †              †  ö   '           † /            †
+ 2            †
+ 7      	      †
+ :            †
+ P      9      †
+ V   
+         †
+ `      	      †
+ f            †
+ i            †
+ l            †
+ r      C      †
+ Ü            †
+ å            †
+ í            †
+ -      S      †        ]      † ùH©¿      ;+      ;+                 Ä∞  0+  ®  0+     	            :  €  %  €                 ¯  D  ·  D                 _  ∆  J  ∆  !               Ÿ  á  Ã  á  %               £  ∏  ç  ∏  +               ‘  Ü  æ  Ü  8               ú    å    A              Ä0  ,+  (  ,+  E                4	  ƒ	  ,	  ƒ	  K   #            Í	  ¡
+  ‚	  ¡
+  P   #            Ï
+  ≈  ‰
+  ≈  V   (            ï  ﬁ  ç  ﬁ  `   #            è    á    Å   5            '  †    †  Ö   #            À  o  √  o  ì   (            t  ¢  l  ¢  °                  8  ¬  8  ¨   %            a  é  Y  é  ±   &            ¬  n!  ∫  n!  ª   1            é!  
+#  Ü!  
+#  €               3#  E$  +#  E$  ‰   &            o$  ,&  g$  ,&  Í   '          ÄH&  –(  7&  –(  Ù              x&  ≈(  p&  ≈(  ı              5°›⁄Xs≤Ë      aÁñbaÁñbC‹‹tD–Æ   h    O^partitionKey=%28https%2Cgodotforums.org%29,:https://godotforums.org/plugins/editor/js/rangy.js?v=1.8.1 necko:classified 1 strongly-framed 1 security-info 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 request-method GET response-head HTTP/2 200 OK
+last-modified: Mon, 28 Oct 2019 22:49:10 GMT
+accept-ranges: bytes
+content-length: 11067
+cache-control: max-age=315360000
+expires: 31 December 2037 23:59:59 GMT
+content-type: application/javascript
+date: Wed, 27 Oct 2021 03:55:34 GMT
+server: Apache
+X-Firefox-Spdy: h2
+ original-response-headers last-modified: Mon, 28 Oct 2019 22:49:10 GMT
+accept-ranges: bytes
+content-length: 11067
+cache-control: max-age=315360000
+expires: 31 December 2037 23:59:59 GMT
+content-type: application/javascript
+date: Wed, 27 Oct 2021 03:55:34 GMT
+server: Apache
+X-Firefox-Spdy: h2
+ ctid 2 uncompressed-len 0 net-response-time-onstart 7577 net-response-time-onstop 10303 alt-data 1;11067,javascript/moz-bytecode-20220106144528-8l alt-data-from-child 1   â

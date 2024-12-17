@@ -1,0 +1,50 @@
+[INFO:2024-06-23 14:12:54,811:startup]: Starting Lutris 0.5.9.1
+[WARNING:2024-06-23 14:12:54,826:dll_manager]: Loading of DXVK versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,826:dll_manager]: Loading of DXVK versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,827:dll_manager]: Loading of VKD3D versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,827:dll_manager]: Loading of VKD3D versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,827:dll_manager]: Loading of D3D Extras versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,827:dll_manager]: Loading of D3D Extras versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,827:dll_manager]: Loading of DXVK-NVAPI versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,827:dll_manager]: Loading of DXVK-NVAPI versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,830:dll_manager]: Loading of DXVK versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,830:dll_manager]: Loading of DXVK versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,831:dll_manager]: Loading of VKD3D versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,831:dll_manager]: Loading of VKD3D versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,831:dll_manager]: Loading of D3D Extras versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,831:dll_manager]: Loading of D3D Extras versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,831:dll_manager]: Loading of DXVK-NVAPI versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,831:dll_manager]: Loading of DXVK-NVAPI versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,843:libretro]: No cores found
+[WARNING:2024-06-23 14:12:54,860:dll_manager]: Loading of DXVK versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,861:dll_manager]: Loading of DXVK versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,861:dll_manager]: Loading of VKD3D versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,861:dll_manager]: Loading of VKD3D versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,861:dll_manager]: Loading of D3D Extras versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,861:dll_manager]: Loading of D3D Extras versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,861:dll_manager]: Loading of DXVK-NVAPI versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,862:dll_manager]: Loading of DXVK-NVAPI versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,863:dll_manager]: Loading of DXVK versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,863:dll_manager]: Loading of DXVK versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,864:dll_manager]: Loading of VKD3D versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,864:dll_manager]: Loading of VKD3D versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,864:dll_manager]: Loading of D3D Extras versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,864:dll_manager]: Loading of D3D Extras versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,864:dll_manager]: Loading of DXVK-NVAPI versions failed, defaulting to locally available versions
+[WARNING:2024-06-23 14:12:54,864:dll_manager]: Loading of DXVK-NVAPI versions failed, defaulting to locally available versions
+[ERROR:2024-06-23 14:12:55,381:runtime]: Failed to get runtimes: HTTP Error 426: Upgrade Required
+[WARNING:2024-06-23 14:12:56,216:http]: Failed to read content length on response from https://api.github.com/repos/lutris/dxvk/releases
+[INFO:2024-06-23 14:12:56,418:dll_manager]: Downloading DXVK v2.3.1...
+[WARNING:2024-06-23 14:13:02,166:http]: Failed to read content length on response from https://api.github.com/repos/lutris/dxvk-nvapi/releases
+[INFO:2024-06-23 14:13:02,337:dll_manager]: Downloading DXVK-NVAPI v0.7.0...
+[WARNING:2024-06-23 14:13:05,219:http]: Failed to read content length on response from https://api.github.com/repos/lutris/vkd3d/releases
+[INFO:2024-06-23 14:13:05,383:dll_manager]: Downloading VKD3D v2.12...
+[INFO:2024-06-23 14:13:07,470:dll_manager]: Downloading D3D Extras v2...
+[INFO:2024-06-23 14:13:18,042:startup]: Startup complete
+[INFO:2024-06-23 14:13:18,043:__init__]: Running migration: mess_to_mame
+[INFO:2024-06-23 14:13:18,043:__init__]: Running migration: migrate_hidden_ids
+[INFO:2024-06-23 14:13:18,044:__init__]: Running migration: migrate_steam_appids
+[INFO:2024-06-23 14:13:18,051:startup]: Running AMD Mesa driver 23.2.1 on RENOIR (renoir, LLVM 15.0.7, DRM 3.57, 6.7.7-060707-generic) (0x1638)
+[INFO:2024-06-23 14:13:18,052:startup]: GPU: 1002:1638 1043:150C (amdgpu drivers)
+[INFO:2024-06-23 14:13:41,547:runner]: Runtime disabled by system configuration
+[INFO:2024-06-23 14:16:26,793:application]: Shutting down Lutris
